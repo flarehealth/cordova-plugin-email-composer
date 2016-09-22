@@ -125,7 +125,7 @@
             [self execCallback:@"Email draft saved."];
             break;
         case MFMailComposeResultCancelled:
-            [self execCallback:@"Email sending cancelled."];
+            [self execCallback:@"Email sending canceled."];
             break;
         default:
             [self execCallback:@"Error occurred when trying to composing email."];

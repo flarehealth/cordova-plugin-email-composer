@@ -96,7 +96,7 @@
 
         if (TARGET_IPHONE_SIMULATOR) {
             [self informAboutIssueWithSimulators];
-            [self execCallback];
+            [self execCallback:NULL];
         }
         else {
             [self presentMailComposerFromProperties:props];
@@ -117,7 +117,20 @@
 {
     [controller dismissViewControllerAnimated:YES completion:NULL];
 
-    [self execCallback];
+    switch (result) {
+        case MFMailComposeResultSent:
+            [self execCallback:@"Email sent."];
+            break;
+        case MFMailComposeResultSaved:
+            [self execCallback:@"Email draft saved."];
+            break;
+        case MFMailComposeResultCancelled:
+            [self execCallback:@"Email sending cancelled."];
+            break;
+        default:
+            [self execCallback:@"Error occurred when trying to composing email."];
+            break;
+    }
 }
 
 #pragma mark -
@@ -184,12 +197,14 @@
 }
 
 /**
- * Invokes the callback without any parameter.
+ * Invokes the callback with a message.
  */
-- (void) execCallback
+- (void) execCallback:(NSString*) message
 {
+
     CDVPluginResult *result = [CDVPluginResult
-                               resultWithStatus:CDVCommandStatus_OK];
+                               resultWithStatus:CDVCommandStatus_OK
+                               messageAsString:message];
 
     [self.commandDelegate sendPluginResult:result
                                 callbackId:_command.callbackId];

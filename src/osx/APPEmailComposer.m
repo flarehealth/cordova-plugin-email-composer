@@ -53,7 +53,7 @@
 - (void) isAvailable:(CDVInvokedUrlCommand*)cmd
 {
     [self.commandDelegate runInBackground:^{
-        NSString* scheme = cmd.arguments[0];
+        NSString* scheme   = [cmd argumentAtIndex:0];
         NSArray* boolArray = [self.impl canSendMail:scheme];
         CDVPluginResult* result;
 
@@ -70,7 +70,7 @@
  */
 - (void) open:(CDVInvokedUrlCommand*)cmd
 {
-    NSDictionary* props = cmd.arguments[0];
+    NSDictionary* props = [cmd argumentAtIndex:0];
 
     self.command = cmd;
 
@@ -82,43 +82,25 @@
             return;
         }
 
-        if (TARGET_IPHONE_SIMULATOR) {
-            [self informAboutIssueWithSimulators];
-            [self execCallback:NULL];
-        }
-        else {
-            [self presentMailComposerFromProperties:props];
-        }
+        [self presentMailComposerFromProperties:props];
     }];
 }
 
 #pragma mark -
-#pragma mark MFMailComposeViewControllerDelegate
+#pragma mark NSSharingServicePickerDelegate
 
-/**
- * Delegate will be called after the mail composer did finish an action
- * to dismiss the view.
- */
-- (void) mailComposeController:(MFMailComposeViewController*)controller
-           didFinishWithResult:(MFMailComposeResult)result
-                         error:(NSError*)error
+- (void) sharingService:(NSSharingService *)sharingService
+          didShareItems:(NSArray *)items
 {
-    [controller dismissViewControllerAnimated:YES completion:NULL];
+    [self execCallback];
+    self.command = NULL;
+}
 
-    switch (result) {
-        case MFMailComposeResultSent:
-            [self execCallback:@"Email sent."];
-            break;
-        case MFMailComposeResultSaved:
-            [self execCallback:@"Email draft saved."];
-            break;
-        case MFMailComposeResultCancelled:
-            [self execCallback:@"Email sending canceled."];
-            break;
-        default:
-            [self execCallback:@"Error occurred when trying to compose email."];
-            break;
-    }
+- (void) sharingService:(NSSharingService *)sharingService
+    didFailToShareItems:(NSArray *)items
+                  error:(NSError *)error
+{
+    [self sharingService:sharingService didShareItems:items];
 }
 
 #pragma mark -
@@ -130,17 +112,21 @@
 - (void) presentMailComposerFromProperties:(NSDictionary*)props
 {
     dispatch_async(dispatch_get_main_queue(), ^{
-        MFMailComposeViewController* draft =
+        NSArray* res =
         [self.impl mailComposerFromProperties:props delegateTo:self];
 
+        NSSharingService* draft     = res[0];
+        NSAttributedString* body    = res[1];
+        NSMutableArray* attachments = res[2];
+
         if (!draft) {
-            [self execCallback:NULL];
+            [self execCallback];
             return;
         }
 
-        [self.viewController presentViewController:draft
-                                          animated:YES
-                                        completion:NULL];
+        [attachments insertObject:body atIndex:0];
+
+        [draft performWithItems:attachments];
     });
 
 }
@@ -152,7 +138,7 @@
 {
     NSURL* url = [self.impl urlFromProperties:props];
 
-    [[UIApplication sharedApplication] openURL:url];
+    [[NSWorkspace sharedWorkspace] openURL:url];
 }
 
 /**
@@ -164,29 +150,12 @@
 }
 
 /**
- * Presents a dialog to the user to inform him about an issue with the iOS8
- * simulator in combination with the mail library.
+ * Invokes the callback without any parameter.
  */
-- (void) informAboutIssueWithSimulators
+- (void) execCallback
 {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[[UIAlertView alloc] initWithTitle:@"Email-Composer"
-                                    message:@"Please use a physical device."
-                                   delegate:NULL
-                          cancelButtonTitle:@"OK"
-                          otherButtonTitles:NULL] show];
-    });
-}
-
-/**
- * Invokes the callback with a message.
- */
-- (void) execCallback:(NSString*) message
-{
-
     CDVPluginResult *result = [CDVPluginResult
-                               resultWithStatus:CDVCommandStatus_OK
-                               messageAsString:message];
+                               resultWithStatus:CDVCommandStatus_OK];
 
     [self.commandDelegate sendPluginResult:result
                                 callbackId:self.command.callbackId];

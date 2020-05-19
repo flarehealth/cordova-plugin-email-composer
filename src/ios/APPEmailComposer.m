@@ -171,7 +171,7 @@
         [[UIApplication sharedApplication] openURL:url
                                            options:@{}
                                  completionHandler:^(BOOL success) {
-            [self execCallback];
+            [self execCallback:NULL];
         }];
     });
 }

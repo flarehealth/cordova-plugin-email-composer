@@ -27,7 +27,16 @@ var exec      = require('cordova/exec'),
  */
 exports.aliases = {
     gmail:   isAndroid ? 'com.google.android.gm' : 'googlegmail://co',
-    outlook: isAndroid ? 'com.microsoft.office.outlook' : 'ms-outlook://compose'
+    outlook: isAndroid ? 'com.microsoft.office.outlook' : 'ms-outlook://compose',
+    hub:     isAndroid ? 'com.blackberry.hub' : undefined
+};
+
+/**
+ * List of possible permissions to request.
+ */
+exports.permission = {
+    READ_EXTERNAL_STORAGE: 1,
+    READ_ACCOUNTS: 2
 };
 
 /**
@@ -38,13 +47,14 @@ exports.aliases = {
 exports.getDefaults = function () {
     return {
         app:           mailto,
+        from:          '',
         subject:       '',
         body:          '',
         to:            [],
         cc:            [],
         bcc:           [],
         attachments:   [],
-        isHtml:        true,
+        isHtml:        false,
         chooserHeader: 'Open with'
     };
 };
@@ -52,12 +62,13 @@ exports.getDefaults = function () {
 /**
  * Informs if the app has the needed permission.
  *
- * @param [ Function ] callback The callback function.
- * @param [ Object ]   scope    The scope of the callback.
+ * @param [ Number ]   permission The permission to check.
+ * @param [ Function ] callback   The callback function.
+ * @param [ Object ]   scope      The scope of the callback.
  *
  * @return [ Void ]
  */
-exports.hasPermission = function(callback, scope) {
+exports.hasPermission = function(permission, callback, scope) {
     var fn = this.createCallbackFn(callback, scope);
 
     if (!isAndroid) {
@@ -65,18 +76,19 @@ exports.hasPermission = function(callback, scope) {
         return;
     }
 
-    exec(fn, null, 'EmailComposer','hasPermission', []);
+    exec(fn, null, 'EmailComposer', 'check', [permission]);
  };
 
 /**
  * Request permission if not already granted.
  *
+ * @param [ Number ]   permission The permission to request.
  * @param [ Function ] callback The callback function.
  * @param [ Object ]   scope    The scope of the callback.
  *
  * @return [ Void ]
  */
-exports.requestPermission = function(callback, scope) {
+exports.requestPermission = function(permission, callback, scope) {
     var fn = this.createCallbackFn(callback, scope);
 
     if (!isAndroid) {
@@ -84,39 +96,25 @@ exports.requestPermission = function(callback, scope) {
         return;
     }
 
-    exec(fn, null, 'EmailComposer','requestPermission', []);
+    exec(fn, null, 'EmailComposer', 'request', [permission]);
 };
 
 /**
- * Verifies if sending emails is supported on the device.
+ * Tries to find out if the device has an configured email account.
  *
- * @param [ String ]   app      An optional app id or uri scheme.
- *                              Defaults to mailto.
  * @param [ Function ] callback The callback function.
  * @param [ Object ]   scope    The scope of the callback.
  *
  * @return [ Void ]
  */
-exports.isAvailable = function (app, callback, scope) {
-
-    if (typeof callback != 'function') {
-        scope    = null;
-        callback = app;
-        app      = mailto;
-    }
-
+exports.hasAccount = function (callback, scope) {
     var fn  = this.createCallbackFn(callback, scope);
-        app = app || mailto;
 
-    if (this.aliases.hasOwnProperty(app)) {
-        app = this.aliases[app];
-    }
-
-    exec(fn, null, 'EmailComposer', 'isAvailable', [app]);
+    exec(fn, null, 'EmailComposer', 'account', []);
 };
 
 /**
- * Verifies if sending emails is supported on the device.
+ * Tries to find out if the device has an installed email client.
  *
  * @param [ String ]   app      An optional app id or uri scheme.
  *                              Defaults to mailto.
@@ -125,7 +123,7 @@ exports.isAvailable = function (app, callback, scope) {
  *
  * @return [ Void ]
  */
-exports.isAvailable2 = function (app, callback, scope) {
+exports.hasClient = function (app, callback, scope) {
 
     if (typeof callback != 'function') {
         scope    = null;
@@ -133,18 +131,33 @@ exports.isAvailable2 = function (app, callback, scope) {
         app      = mailto;
     }
 
-    var fn  = this.createCallbackFn(callback, scope), fn2;
+    var fn  = this.createCallbackFn(callback, scope),
         app = app || mailto;
 
     if (this.aliases.hasOwnProperty(app)) {
         app = this.aliases[app];
     }
 
-    if (fn) {
-        fn2 = function (a, b) { fn(b, a); };
+    exec(fn, null, 'EmailComposer', 'client', [app]);
+};
+
+/**
+ * List of package IDs for all available email clients (Android only).
+ *
+ * @param [ Function ] callback The callback function.
+ * @param [ Object ]   scope    The scope of the callback.
+ *
+ * @return [ Void ]
+ */
+exports.getClients = function (callback, scope) {
+    var fn = this.createCallbackFn(callback, scope);
+
+    if (!isAndroid) {
+        if (fn) fn(null);
+        return;
     }
 
-    exec(fn2, null, 'EmailComposer', 'isAvailable', [app]);
+    exec(fn, null, 'EmailComposer', 'clients', []);
 };
 
 /**
@@ -164,7 +177,7 @@ exports.open = function (options, callback, scope) {
         options  = {};
     }
 
-    var fn      = this.createCallbackFn(callback, scope);
+    var fn      = this.createCallbackFn(callback, scope),
         options = this.mergeWithDefaults(options || {});
 
     if (!isAndroid && options.app != mailto && fn) {
@@ -178,12 +191,12 @@ exports.open = function (options, callback, scope) {
  * Adds a new mail app alias.
  *
  * @param [ String ] alias   The alias name.
- * @param [ String ] package The package name.
+ * @param [ String ] packageName The package name.
  *
  * @return [ Void ]
  */
-exports.addAlias = function (alias, package) {
-    this.aliases[alias] = package;
+exports.addAlias = function (alias, packageName) {
+    this.aliases[alias] = packageName;
 };
 
 /**
@@ -205,39 +218,43 @@ exports.openDraft = function () {
 exports.mergeWithDefaults = function (options) {
     var defaults = this.getDefaults();
 
-    if (options.hasOwnProperty('isHTML')) {
-        options.isHtml = options.isHTML;
+    if (!options.hasOwnProperty('isHtml')) {
+        options.isHtml = defaults.isHtml;
     }
 
     if (options.hasOwnProperty('app')) {
-        var package = this.aliases[options.app];
-        options.app = package || options.app;
+        options.app = this.aliases[options.app];
     }
 
-    for (var key in defaults) {
+    if (Array.isArray(options.body)) {
+        options.body = options.body.join("\n");
+    }
 
-        if (!options.hasOwnProperty(key)) {
-            options[key] = defaults[key];
-            continue;
-        }
+    options.app           = String(options.app || defaults.app);
+    options.from          = String(options.from || defaults.from);
+    options.subject       = String(options.subject || defaults.subject);
+    options.body          = String(options.body || defaults.body);
+    options.chooserHeader = String(options.chooserHeader || defaults.chooserHeader);
+    options.to            = options.to || defaults.to;
+    options.cc            = options.cc || defaults.cc;
+    options.bcc           = options.bcc || defaults.bcc;
+    options.attachments   = options.attachments || defaults.attachments;
+    options.isHtml        = !!options.isHtml;
 
-        var custom_  = options[key],
-            default_ = defaults[key];
+    if (!Array.isArray(options.to)) {
+        options.to = [options.to];
+    }
 
-        if (custom_ === null || custom_ === undefined) {
-            options[key] = default_;
-            continue;
-        }
+    if (!Array.isArray(options.cc)) {
+        options.cc = [options.cc];
+    }
 
-        if (typeof default_ == typeof custom_)
-            continue;
+    if (!Array.isArray(options.bcc)) {
+        options.bcc = [options.bcc];
+    }
 
-        if (typeof default_ == 'string') {
-            options[key] = custom_.join('');
-        } else
-        if (typeof default_ == 'object') {
-            options[key] = [custom_.toString()];
-        }
+    if (!Array.isArray(options.attachments)) {
+        options.attachments = [options.attachments];
     }
 
     return options;
@@ -256,7 +273,7 @@ exports.mergeWithDefaults = function (options) {
  */
 exports.createCallbackFn = function (callback, scope) {
 
-    if (typeof callback != 'function')
+    if (typeof callback !== 'function')
         return;
 
     return function () {

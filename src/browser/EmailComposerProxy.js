@@ -18,7 +18,7 @@
  */
 
 /**
- * Verifies if sending emails is supported on the device.
+ * Tries to find out if the device has an configured email account.
  *
  * @param [ Function ] success Success callback
  * @param [ Function ] error   Error callback
@@ -26,8 +26,21 @@
  *
  * @return [ Void ]
  */
-exports.isAvailable = function (success, error, args) {
-    success(true, false);
+exports.account = function (success, error, args) {
+    success(null);
+};
+
+/**
+ * Tries to find out if the device has an installed email client.
+ *
+ * @param [ Function ] success Success callback
+ * @param [ Function ] error   Error callback
+ * @param [ Array ]    args    Interface arguments
+ *
+ * @return [ Void ]
+ */
+exports.client = function (success, error, args) {
+    success(null);
 };
 
 /**
@@ -41,7 +54,7 @@ exports.isAvailable = function (success, error, args) {
  */
 exports.open = function (success, error, args) {
     var props   = args[0],
-        mailto  = 'mailto:' + encodeURIComponent(props.to),
+        mailto  = 'mailto:' + exports.encodeURIs(props.to),
         options = '';
 
     if (props.subject !== '') {
@@ -52,12 +65,12 @@ exports.open = function (success, error, args) {
         options += '&body=' + encodeURIComponent(props.body);
     }
 
-    if (props.cc !== '') {
-        options += '&cc=' + encodeURIComponent(props.cc);
+    if (props.cc.length > 0) {
+        options += '&cc=' + exports.encodeURIs(props.cc);
     }
 
-    if (props.bcc !== '') {
-        options += '&bcc=' + encodeURIComponent(props.bcc);
+    if (props.bcc.length > 0) {
+        options += '&bcc=' + exports.encodeURIs(props.bcc);
     }
 
     if (options !== '') {
@@ -67,6 +80,17 @@ exports.open = function (success, error, args) {
     window.location.href = mailto;
 
     success();
+};
+
+/**
+ * Convert list of uris to an encoded string.
+ *
+ * @param [ Array<String> ] uris List of uris to encode.
+ *
+ * @return [ String ]
+ */
+exports.encodeURIs = function (uris) {
+    return encodeURIComponent(uris.join(';'));
 };
 
 require('cordova/exec/proxy').add('EmailComposer', exports);

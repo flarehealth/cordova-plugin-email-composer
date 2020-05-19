@@ -94,16 +94,11 @@
     [self.commandDelegate runInBackground:^{
         NSString* scheme = [props objectForKey:@"app"];
 
-        if (! [self canUseAppleMail:scheme]) {
+        if ([self canUseAppleMail:scheme]) {
+            [self presentMailComposerFromProperties:props];
+        } else {
             [self openURLFromProperties:props];
-            return;
         }
-        if (TARGET_IPHONE_SIMULATOR) {
-            [self informAboutIssueWithSimulators];
-            [self execCallback:NULL];
-            return;
-        }
-        [self presentMailComposerFromProperties:props];
     }];
 }
 
@@ -182,21 +177,6 @@
 - (BOOL) canUseAppleMail:(NSString*) scheme
 {
     return [scheme hasPrefix:@"mailto"];
-}
-
-/**
- * Presents a dialog to the user to inform him about an issue with the iOS8
- * simulator in combination with the mail library.
- */
-- (void) informAboutIssueWithSimulators
-{
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[[UIAlertView alloc] initWithTitle:@"Email-Composer"
-                                    message:@"Please use a physical device."
-                                   delegate:NULL
-                          cancelButtonTitle:@"OK"
-                          otherButtonTitles:NULL] show];
-    });
 }
 
 /**
